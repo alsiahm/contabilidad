@@ -161,7 +161,7 @@ def calcular_siguiente_gasto():
         SELECT numero_gasto FROM gastos 
         WHERE numero_gasto LIKE ? 
         ORDER BY id DESC LIMIT 1
-    """, (f"GAS-{año_actual}-%",))
+    """, (f"GAS-{año_actual}-%",)) 
     
     ultimo_registro = cursor.fetchone()
     conn.close()
