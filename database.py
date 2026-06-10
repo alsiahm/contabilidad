@@ -121,7 +121,7 @@ def calcular_siguiente_factura():
     """, (f"FAC-{año_actual}-%",))
     ultimo = cursor.fetchone()
     conn.close()
-    nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 1
+    nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 2296
     return f"FAC-{año_actual}-{nuevo_num:04d}"
 
 def agregar_factura(numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic_=7.0):

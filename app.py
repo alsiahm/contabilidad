@@ -17,8 +17,6 @@ estilo_limpio = """
     </style>
 """
 st.markdown(estilo_limpio, unsafe_allow_html=True)
-
-st.set_page_config(layout="wide", page_title="Sistema Contable")
 st.title("Sistema de Gestión y Facturación :)")
 
 # Creamos las pestañas de navegación

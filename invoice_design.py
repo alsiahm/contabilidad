@@ -14,12 +14,12 @@ EMPRESA = {
     "email":     "luzmarinamge@gmail.com",
 }
 
-# Colores corporativos
-AZUL_OSC  = (20,  60, 100)   # encabezado / títulos
-AZUL_MED  = (41, 105, 176)   # barra de tabla
-GRIS_LIN  = (210, 215, 220)  # líneas divisorias
-GRIS_TEXT = (100, 100, 100)  # texto secundario
-NEGRO     = (30,  30,  30)   # texto principal
+# Colores corporativos — tostado/marrón que pega con beige y queda bien en B/N
+AZUL_OSC  = (139, 101, 60)   # marrón medio — más claro para que se vea el logo
+AZUL_MED  = (140, 110,  75)  # tostado medio — barras de sección y cabecera tabla
+GRIS_LIN  = (210, 205, 200)  # líneas divisorias (toque cálido)
+GRIS_TEXT = (100,  90,  80)  # texto secundario
+NEGRO     = (30,   30,  30)  # texto principal
 
 # Ruta al logo (PNG o JPG).  Si no existe, se omite silenciosamente.
 # Coloca el archivo en la misma carpeta que invoice_design.py y ajusta el nombre.
@@ -42,33 +42,46 @@ PRIVACIDAD = (
 
 class FacturaPDF(FPDF):
 
-    # ── CABECERA ──────────────────────────────
+# ── CABECERA ──────────────────────────────
     def header(self):
+        ALTURA_BANDA = 40
+
         # Banda de color superior
         self.set_fill_color(*AZUL_OSC)
-        self.rect(0, 0, 210, 28, style="F")
+        self.rect(0, 0, 210, ALTURA_BANDA, style="F")
 
         # Logo (si existe)
         logo_w = 0
         if os.path.exists(LOGO_PATH):
-            logo_w = 35
-            self.image(LOGO_PATH, x=8, y=4, w=logo_w, h=20, keep_aspect_ratio=True)
+            logo_w = 55
+            self.image(LOGO_PATH, x=6, y=-10, w=logo_w, keep_aspect_ratio=True)
 
-        # Nombre empresa en la banda
-        self.set_font("Helvetica", "B", 15)
+        # Columna de texto despues del logo
+        x_texto = logo_w + 12
+        ancho_texto = 210 - x_texto - 12
+
+        # Nombre empresa
+        self.set_font("Helvetica", "B", 14)
         self.set_text_color(255, 255, 255)
-        self.set_xy(logo_w + 10, 6)
-        self.cell(0, 7, EMPRESA["nombre"], new_x="LMARGIN", new_y="NEXT")
+        self.set_xy(x_texto, 6)
+        self.cell(ancho_texto, 7, EMPRESA["nombre"])
+
+        # CIF y direccion
         self.set_font("Helvetica", size=8)
-        self.set_text_color(200, 220, 240)
-        self.set_x(logo_w + 10)
-        self.cell(0, 5, f"CIF: {EMPRESA['cif']}   -   {EMPRESA['direccion']}   -   {EMPRESA['cp_ciudad']}")
-        self.set_x(logo_w + 10)
-        self.set_y(self.get_y() + 5)
-        self.cell(0, 5, f"Tel.: {EMPRESA['telefono']}   -   {EMPRESA['email']}")
+        self.set_text_color(210, 200, 185)
+        self.set_xy(x_texto, 15)
+        self.cell(ancho_texto, 5, f"CIF: {EMPRESA['cif']}   -   {EMPRESA['direccion']}")
 
+        # Ciudad
+        self.set_xy(x_texto, 21)
+        self.cell(ancho_texto, 5, EMPRESA["cp_ciudad"])
 
-        self.ln(18)  # espacio tras la banda
+        # Telefono y email
+        self.set_xy(x_texto, 28)
+        self.cell(ancho_texto, 5, f"Tel.: {EMPRESA['telefono']}   -   {EMPRESA['email']}")
+
+        self.ln(ALTURA_BANDA - 2)
+
 
     # ── PIE DE PÁGINA ─────────────────────────
     def footer(self):
@@ -128,7 +141,7 @@ def generar_pdf_bytes(datos: dict) -> bytes:
     pdf.add_page()
 
     # ── BLOQUE: número de factura y fecha (destacado) ──
-    pdf.set_fill_color(240, 245, 250)
+    pdf.set_fill_color(248, 244, 238)
     pdf.set_draw_color(*AZUL_MED)
     pdf.set_line_width(0.4)
     pdf.rect(12, pdf.get_y(), 186, 14, style="FD")
@@ -167,7 +180,7 @@ def generar_pdf_bytes(datos: dict) -> bytes:
     pdf.cell(COL[3], 7, "Total (EUR)", align="R", fill=True, new_x="LMARGIN", new_y="NEXT")
 
     # Fila de datos (fondo alternado)
-    pdf.set_fill_color(245, 248, 252)
+    pdf.set_fill_color(250, 247, 242)
     pdf.set_text_color(*NEGRO)
     pdf.set_font("Helvetica", size=9)
     pdf.set_line_width(0.2)
