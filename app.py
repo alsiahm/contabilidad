@@ -8,6 +8,17 @@ from invoice_design import generar_pdf_bytes
 db.crear_tablas()
 
 st.set_page_config(layout="wide", page_title="Sistema Contable")
+
+estilo_limpio = """
+    <style>
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    </style>
+"""
+st.markdown(estilo_limpio, unsafe_allow_html=True)
+
+st.set_page_config(layout="wide", page_title="Sistema Contable")
 st.title("Sistema de Gestión y Facturación :)")
 
 # Creamos las pestañas de navegación
