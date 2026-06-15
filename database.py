@@ -11,8 +11,8 @@ def conectar_db():
         host="aws-1-eu-central-1.pooler.supabase.com",
         port="5432",                                
         database="postgres",
-        user="postgres.jiodhkgaycfvjoienkvx",        
-        password="holamegustanlaspapas",                 
+        user="PLACEHOLDER",        
+        password="PLACEHOLDER",                 
         sslmode="require"
     )
 # ─────────────────────────────────────────
