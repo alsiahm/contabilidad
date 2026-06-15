@@ -1,9 +1,7 @@
 from fpdf import FPDF
 import os
 
-# ──────────────────────────────────────────────
-# CONFIGURACIÓN — edita estos valores
-# ──────────────────────────────────────────────
+# CONFIGURACIÓN 
 EMPRESA = {
     "nombre":    "Martín García-Estrada Abogados",
     "forma":     "MARTÍN GARCÍA-ESTRADA ABOGADOS, S.C.",
@@ -14,18 +12,15 @@ EMPRESA = {
     "email":     "luzmarinamge@gmail.com",
 }
 
-# Colores corporativos — tostado/marrón que pega con beige y queda bien en B/N
-AZUL_OSC  = (139, 101, 60)   # marrón medio — más claro para que se vea el logo
-AZUL_MED  = (140, 110,  75)  # tostado medio — barras de sección y cabecera tabla
-GRIS_LIN  = (210, 205, 200)  # líneas divisorias (toque cálido)
+# Colores corporativos
+AZUL_OSC  = (139, 101, 60)   # marrón medio
+AZUL_MED  = (140, 110,  75)  # tostado medio
+GRIS_LIN  = (210, 205, 200)  # líneas divisorias
 GRIS_TEXT = (100,  90,  80)  # texto secundario
 NEGRO     = (30,   30,  30)  # texto principal
 
-# Ruta al logo (PNG o JPG).  Si no existe, se omite silenciosamente.
-# Coloca el archivo en la misma carpeta que invoice_design.py y ajusta el nombre.
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "logo.png")
 
-# ──────────────────────────────────────────────
 
 PRIVACIDAD = (
     "Politica de privacidad - Responsable: MARTIN GARCIA-ESTRADA ABOGADOS, S.C. - NIF: J38700829 - "
@@ -42,7 +37,7 @@ PRIVACIDAD = (
 
 class FacturaPDF(FPDF):
 
-# ── CABECERA ──────────────────────────────
+# CABECERA 
     def header(self):
         ALTURA_BANDA = 40
 
@@ -50,7 +45,7 @@ class FacturaPDF(FPDF):
         self.set_fill_color(*AZUL_OSC)
         self.rect(0, 0, 210, ALTURA_BANDA, style="F")
 
-        # Logo (si existe)
+        # Logo 
         logo_w = 0
         if os.path.exists(LOGO_PATH):
             logo_w = 55
@@ -83,7 +78,7 @@ class FacturaPDF(FPDF):
         self.ln(ALTURA_BANDA - 2)
 
 
-    # ── PIE DE PÁGINA ─────────────────────────
+    # PIE DE PÁGINA 
     def footer(self):
         # Texto legal IGIC
         self.set_y(-42)
@@ -91,7 +86,7 @@ class FacturaPDF(FPDF):
         self.line(10, self.get_y(), 200, self.get_y())
         self.ln(2)
 
-        # Política de privacidad (texto muy pequeño, multilínea)
+        # Política de privacidad
         self.ln(1)
         self.set_font("Helvetica", size=6)
         self.set_text_color(160, 160, 160)
@@ -103,7 +98,7 @@ class FacturaPDF(FPDF):
         self.set_text_color(*GRIS_TEXT)
         self.cell(0, 5, f"Página {self.page_no()}/{{nb}}", align="R")
 
-    # ── UTILIDADES ────────────────────────────
+    # UTILIDADES
     def seccion_titulo(self, texto, ancho=88):
         """Barra de seccion con fondo azul medio, respeta la X actual."""
         x_ini = self.get_x()
@@ -130,7 +125,7 @@ class FacturaPDF(FPDF):
         self.set_xy(x_ini, y_ini + 6)  # siguiente fila, misma X
 
 
-# ── GENERADOR PRINCIPAL ───────────────────────
+#  GENERADOR PRINCIPAL
 
 def generar_pdf_bytes(datos: dict) -> bytes:
     """Genera el PDF en memoria y devuelve bytes."""
@@ -140,7 +135,7 @@ def generar_pdf_bytes(datos: dict) -> bytes:
     pdf.set_auto_page_break(auto=True, margin=50)   # margen inferior amplio para el pie
     pdf.add_page()
 
-    # ── BLOQUE: número de factura y fecha (destacado) ──
+    # número de factura y fecha
     pdf.set_fill_color(248, 244, 238)
     pdf.set_draw_color(*AZUL_MED)
     pdf.set_line_width(0.4)
@@ -153,10 +148,10 @@ def generar_pdf_bytes(datos: dict) -> bytes:
     pdf.set_x(14)
     pdf.set_font("Helvetica", size=8)
     pdf.set_text_color(*GRIS_TEXT)
-    pdf.cell(0, 7, "")   # fila vacía interior del rect
+    pdf.cell(0, 7, "")   
     pdf.ln(6)
 
-    # ── BLOQUE: datos del cliente ──
+    #  cliente
     pdf.seccion_titulo("DATOS DEL CLIENTE", ancho=186)
     for etiq, val in [
         ("Nombre:",    datos["cliente_nombre"]),
@@ -166,7 +161,7 @@ def generar_pdf_bytes(datos: dict) -> bytes:
         pdf.fila_dato(etiq, val, ancho_etiq=35, ancho_valor=150)
     pdf.ln(6)
 
-    # ── BLOQUE: tabla de conceptos ──
+    # tabla de conceptos
     pdf.seccion_titulo("DETALLE DE SERVICIOS")
 
     # Cabecera de tabla
@@ -179,7 +174,7 @@ def generar_pdf_bytes(datos: dict) -> bytes:
     pdf.cell(COL[2], 7, "IGIC", align="C", fill=True)
     pdf.cell(COL[3], 7, "Total (EUR)", align="R", fill=True, new_x="LMARGIN", new_y="NEXT")
 
-    # Fila de datos (fondo alternado)
+    # Fila de datos
     pdf.set_fill_color(250, 247, 242)
     pdf.set_text_color(*NEGRO)
     pdf.set_font("Helvetica", size=9)
@@ -192,7 +187,7 @@ def generar_pdf_bytes(datos: dict) -> bytes:
     pdf.cell(COL[2], 7, f"{datos['igic_porcentaje']}%", align="C", fill=True, border="B")
     pdf.cell(COL[3], 7, f"{datos['base'] * (1 + datos['igic_porcentaje']/100):,.2f}", align="R", fill=True, border="B", new_x="LMARGIN", new_y="NEXT")
 
-    # Filas de provisiones descontadas (si las hay)
+    # Filas de provisiones descontadas
     provisiones = datos.get("provisiones", [])
     if provisiones:
         for prov in provisiones:
@@ -206,7 +201,7 @@ def generar_pdf_bytes(datos: dict) -> bytes:
         pdf.set_text_color(*NEGRO)
     pdf.ln(4)
 
-    # ── BLOQUE: totales (alineados a la derecha) ──
+    # totales
     igic_importe = datos["base"] * (datos["igic_porcentaje"] / 100)
     total = datos["base"] + igic_importe
 

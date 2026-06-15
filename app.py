@@ -24,9 +24,8 @@ tab_facturar, tab_clientes, tab_gastos, tab_provisiones, tab_resumen = st.tabs(
     ["Emitir Factura", "Gestión de Clientes", "Gastos Empresa", "Provisiones", "Resumen"]
 )
 
-# ==========================================
-# PESTAÑA 2: GESTIÓN DE CLIENTES
-# ==========================================
+# GESTIÓN DE CLIENTES
+
 with tab_clientes:
     st.header("Registrar Nuevo Cliente")
     col1, col2 = st.columns(2)
@@ -62,9 +61,7 @@ with tab_clientes:
             st.success(f"Cliente '{cliente_a_borrar}' eliminado correctamente.")
             st.rerun()
 
-# ==========================================
-# PESTAÑA 1: EMITIR FACTURA (CON VISTA PREVIA)
-# ==========================================
+# EMITIR FACTURA
 with tab_facturar:
     lista_clientes = db.obtener_clientes()
 
@@ -176,9 +173,7 @@ with tab_facturar:
     else:
         st.info("No hay facturas registradas aún.")
 
-# ==========================================
-# PESTAÑA 4: RESUMEN
-# ==========================================
+# RESUMEN
 with tab_resumen:
     st.header("Resumen de Ingresos y Gastos")
 
@@ -242,9 +237,8 @@ with tab_resumen:
                 })
             st.dataframe(datos_g, use_container_width=True, hide_index=True)
 
-# ==========================================
-# PESTAÑA 3: GASTOS EMPRESA
-# ==========================================
+
+# GASTOS EMPRESA
 with tab_gastos:
     st.header("Control de Gastos de la Empresa")
 
@@ -296,9 +290,7 @@ with tab_gastos:
                 st.warning(f"Gasto {gasto_a_borrar} eliminado.")
                 st.rerun()
 
-# ==========================================
-# PESTAÑA: PROVISIONES DE FONDO
-# ==========================================
+# PROVISIONES DE FONDO
 with tab_provisiones:
     st.header("Provisiones de Fondo")
     col_form, col_tabla = st.columns([1, 1.5])
@@ -315,7 +307,7 @@ with tab_provisiones:
             p_concepto = st.text_input("Concepto", placeholder="Ej: Provision fondos asunto laboral")
             p_importe = st.number_input("Importe (EUR)", min_value=0.0, value=0.0, step=50.0, key="imp_prov")
 
-            # Opcional: vincular a una factura existente
+            # vincular a una factura existente
             todas_fac = db.obtener_facturas_periodo()
             opciones_fac = ["Sin factura asociada"] + [dict(f)["numero_factura"] for f in todas_fac]
             fac_sel = st.selectbox("Vincular a factura (opcional)", opciones_fac, key="sel_fac_prov")

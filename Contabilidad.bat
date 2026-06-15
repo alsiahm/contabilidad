@@ -3,7 +3,7 @@ if "%1"=="" (start cmd /k "%~f0" run & exit)
 title Iniciando Sistema Contable...
 cd /d "%~dp0"
 
-:: ── COMPROBAR SI PYTHON ESTA INSTALADO ──
+:: COMPROBAR SI PYTHON ESTA INSTALADO
 python --version >nul 2>&1
 if errorlevel 1 (
     echo ============================================================
@@ -37,8 +37,7 @@ if errorlevel 1 (
 ) else (
     for /f "tokens=*" %%i in ('where python') do set PYTHON_EXE=%%i
 )
-
-:: ── PRIMERA VEZ: crear venv e instalar dependencias ──
+:: crear venv e instalar dependencias
 if not exist "venv\Scripts\activate.bat" (
     echo ============================================================
     echo   PREPARANDO LA APLICACION POR PRIMERA VEZ
@@ -67,7 +66,7 @@ if not exist "venv\Scripts\activate.bat" (
     echo.
 )
 
-:: ── ARRANCAR STREAMLIT ──
+:: ARRANCAR STREAMLIT
 echo Abriendo la aplicacion en el navegador...
 echo (Puedes minimizar esta ventana, pero no cerrarla)
 echo.

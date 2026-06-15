@@ -9,10 +9,10 @@ def conectar_db():
     """Establece la conexión usando el Pooler de Supabase optimizado para IPv4."""
     return psycopg2.connect(
         host="aws-1-eu-central-1.pooler.supabase.com",
-        port="5432",                                  # <- Pon aquí el puerto exacto que te pida tu panel (5432 o 6543)
+        port="5432",                                
         database="postgres",
-        user="postgres.jiodhkgaycfvjoienkvx",         # Tu usuario compuesto de Supabase
-        password="holamegustanlaspapas",                  # Tu contraseña limpia, SIN corchetes []
+        user="postgres.jiodhkgaycfvjoienkvx",        
+        password="holamegustanlaspapas",                 
         sslmode="require"
     )
 # ─────────────────────────────────────────
@@ -70,9 +70,7 @@ def crear_tablas():
     conn.close()
 
 
-# ─────────────────────────────────────────
 # CLIENTES
-# ─────────────────────────────────────────
 
 def agregar_cliente(nombre_fiscal, cif_nif, direccion="", email=""):
     conn = conectar_db()
@@ -106,9 +104,7 @@ def borrar_cliente(cliente_id):
     conn.close()
 
 
-# ─────────────────────────────────────────
 # FACTURAS
-# ─────────────────────────────────────────
 
 def calcular_siguiente_factura():
     conn = conectar_db()
@@ -143,7 +139,6 @@ def obtener_facturas_periodo(año=None, trimestre=None):
     condiciones = []
     params = []
     if año:
-        # fecha guardada como DD/MM/YYYY — extraemos año con substring
         condiciones.append("SUBSTRING(f.fecha, 7, 4) = %s")
         params.append(str(año))
     if trimestre:
@@ -181,9 +176,7 @@ def guardar_factura_bd(numero, fecha, cliente_id, concepto, base, igic_p, import
     conn.close()
 
 
-# ─────────────────────────────────────────
 # GASTOS
-# ─────────────────────────────────────────
 
 def calcular_siguiente_gasto():
     conn = conectar_db()
@@ -253,9 +246,7 @@ def borrar_gasto(numero_gasto):
     conn.close()
 
 
-# ─────────────────────────────────────────
 # PROVISIONES
-# ─────────────────────────────────────────
 
 def calcular_siguiente_provision():
     conn = conectar_db()
