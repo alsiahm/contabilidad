@@ -63,6 +63,11 @@ with tab_clientes:
 
 # EMITIR FACTURA
 with tab_facturar:
+    if st.session_state.get("factura_guardada"):
+        st.success(f"¡Factura {st.session_state['factura_guardada']} registrada con éxito en el histórico!")
+        st.balloons()
+        del st.session_state["factura_guardada"]
+
     lista_clientes = db.obtener_clientes()
 
     if not lista_clientes:
@@ -210,7 +215,7 @@ with tab_resumen:
     m4.metric("Gastos", f"{total_gastos:,.2f} €")
     m5.metric("Beneficio neto", f"{beneficio:,.2f} €", delta=f"{beneficio:,.2f} €")
 
-    st.caption(f"Dinero que entra en la cuenta este periodo: **{total_cobrado:,.2f} €**")
+    st.caption(f"Dinero total contando retenciones e IGIC: **{total_cobrado:,.2f} €**")
     st.divider()
 
     col_t1, col_t2 = st.columns(2)

@@ -138,17 +138,26 @@ def calcular_siguiente_factura():
     nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 2296
     return f"FAC-{año_actual}-{nuevo_num:04d}"
 
-def agregar_factura(numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic_=7.0, porcentaje_retencion_=0.0):
+def agregar_factura(numero_factura, fecha, cliente_id, concepto, base_imponible,
+                     porcentaje_igic_=7.0, porcentaje_retencion=0.0):
     conn = conectar_db()
     cursor = conn.cursor()
     porcentaje_igic = porcentaje_igic_
     importe_igic = base_imponible * (porcentaje_igic / 100)
-    importe_retencion = base_imponible * (porcentaje_retencion_ / 100)
-    total = base_imponible + importe_igic - importe_retencion
+    importe_retencion = base_imponible * (porcentaje_retencion / 100)
+
+    total = base_imponible + importe_igic
+    total_cobrado = total - importe_retencion
+
     cursor.execute("""
-        INSERT INTO facturas (numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic, importe_igic, porcentaje_retencion, importe_retencion, total)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic, importe_igic, porcentaje_retencion_, importe_retencion, total))
+        INSERT INTO facturas
+            (numero_factura, fecha, cliente_id, concepto, base_imponible,
+             porcentaje_igic, importe_igic, total,
+             porcentaje_retencion, importe_retencion, total_cobrado)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (numero_factura, fecha, cliente_id, concepto, base_imponible,
+          porcentaje_igic, importe_igic, total,
+          porcentaje_retencion, importe_retencion, total_cobrado))
     conn.commit()
     conn.close()
 
