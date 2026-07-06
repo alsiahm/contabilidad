@@ -12,7 +12,7 @@ def conectar_db():
         port="5432",                                
         database="postgres",
         user="postgres.jiodhkgaycfvjoienkvx",        
-        password="holamegustanlaspapas",                 
+        password="fefe",                 
         sslmode="require"
     )
 # ─────────────────────────────────────────
@@ -65,6 +65,24 @@ def crear_tablas():
         factura_asociada TEXT DEFAULT NULL,
         aplicada INTEGER DEFAULT 0
     )""")
+
+    cursor.execute("""
+        ALTER TABLE facturas ADD COLUMN IF NOT EXISTS porcentaje_retencion REAL DEFAULT 0
+    """)
+    cursor.execute("""
+        ALTER TABLE facturas ADD COLUMN IF NOT EXISTS importe_retencion REAL DEFAULT 0
+    """)
+    cursor.execute("""
+        ALTER TABLE facturas ADD COLUMN IF NOT EXISTS total_cobrado REAL
+    """)
+
+    cursor.execute("""
+        UPDATE facturas
+        SET total_cobrado = total,
+            importe_retencion = 0,
+            porcentaje_retencion = 0
+        WHERE total_cobrado IS NULL
+    """)
 
     conn.commit()
     conn.close()
@@ -120,16 +138,17 @@ def calcular_siguiente_factura():
     nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 2296
     return f"FAC-{año_actual}-{nuevo_num:04d}"
 
-def agregar_factura(numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic_=7.0):
+def agregar_factura(numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic_=7.0, porcentaje_retencion_=0.0):
     conn = conectar_db()
     cursor = conn.cursor()
     porcentaje_igic = porcentaje_igic_
     importe_igic = base_imponible * (porcentaje_igic / 100)
-    total = base_imponible + importe_igic
+    importe_retencion = base_imponible * (porcentaje_retencion_ / 100)
+    total = base_imponible + importe_igic - importe_retencion
     cursor.execute("""
-        INSERT INTO facturas (numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic, importe_igic, total)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """, (numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic, importe_igic, total))
+        INSERT INTO facturas (numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic, importe_igic, porcentaje_retencion, importe_retencion, total)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic, importe_igic, porcentaje_retencion_, importe_retencion, total))
     conn.commit()
     conn.close()
 
@@ -147,13 +166,14 @@ def obtener_facturas_periodo(año=None, trimestre=None):
         params.append(list(meses[trimestre]))
     where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
     cursor.execute(f"""
-        SELECT f.numero_factura, f.fecha, c.nombre_fiscal AS cliente,
-               f.base_imponible, f.porcentaje_igic, f.importe_igic, f.total
-        FROM facturas f
-        LEFT JOIN clientes c ON f.cliente_id = c.id
-        {where}
-        ORDER BY f.id DESC
-    """, params)
+            SELECT f.numero_factura, f.fecha, c.nombre_fiscal AS cliente,
+                f.base_imponible, f.porcentaje_igic, f.importe_igic, f.total,
+                f.porcentaje_retencion, f.importe_retencion, f.total_cobrado
+            FROM facturas f
+            LEFT JOIN clientes c ON f.cliente_id = c.id
+            {where}
+            ORDER BY f.id DESC
+        """, params)
     rows = cursor.fetchall()
     conn.close()
     return rows

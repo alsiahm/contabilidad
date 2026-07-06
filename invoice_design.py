@@ -203,7 +203,9 @@ def generar_pdf_bytes(datos: dict) -> bytes:
 
     # totales
     igic_importe = datos["base"] * (datos["igic_porcentaje"] / 100)
-    total = datos["base"] + igic_importe
+    retencion = datos["retencion"]
+    importe_retencion = datos["importe_retencion"]
+    total = datos["base"] + igic_importe - importe_retencion
 
     ancho_total = 90
     x_totales = 210 - 12 - ancho_total
@@ -222,7 +224,10 @@ def generar_pdf_bytes(datos: dict) -> bytes:
     fila_total(f"IGIC ({datos['igic_porcentaje']}%):", igic_importe)
 
     if datos.get("total_provisiones", 0) > 0:
-      fila_total("Provisiones a cuenta:", -datos["total_provisiones"])
+        fila_total("Provisiones a cuenta:", -datos["total_provisiones"])
+
+    if retencion > 0:
+        fila_total(f"Retención IRPF ({retencion}%):", -importe_retencion)
 
     # Línea separadora antes del total
     pdf.set_draw_color(*AZUL_MED)

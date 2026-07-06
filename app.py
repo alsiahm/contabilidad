@@ -90,9 +90,15 @@ with tab_facturar:
             concepto = st.text_area("Concepto", placeholder="Describa el servicio prestado...")
             base = st.number_input("Base Imponible (EUR)", min_value=0.0, value=0.0, step=50.0)
             igic_porcentaje = st.selectbox("Tipo de IGIC aplicable", [7.0, 0.0, 3.0, 15.0])
+            retencion = st.selectbox(
+            "Retención aplicable (facturas a empresas)",
+            [0.0, 15.0],
+            help="Las empresas están obligadas a retener el 15% del IRPF en facturas de profesionales. "
+                 "Si la factura es a un particular, selecciona 0%.")
 
             importe_igic = base * (igic_porcentaje / 100)
-            total = base + importe_igic
+            importe_retencion = base * (retencion / 100)
+            total = base + importe_igic - importe_retencion
 
             st.metric(label="Total a Cobrar (IGIC Inc.)", value=f"{total:.2f} EUR")
 
@@ -122,7 +128,7 @@ with tab_facturar:
                 "cliente_nombre": nombre_c, "cliente_cif": cif_c, "cliente_dir": dir_c if dir_c else "S/D",
                 "concepto": concepto if concepto else "Servicios profesionales",
                 "base": base, "igic_porcentaje": igic_porcentaje, "total": total,
-                # Nuevos campos:
+                "retencion": retencion, "importe_retencion": importe_retencion,
                 "provisiones": [
                     {"concepto": dict(p)["concepto"], "importe": dict(p)["importe"]}
                     for p in provisiones_pendientes if dict(p)["id"] in provisiones_seleccionadas
@@ -135,7 +141,7 @@ with tab_facturar:
                 if base <= 0:
                     st.error("La base imponible debe ser mayor que 0.")
                 else:
-                    db.agregar_factura(num_factura_auto, fecha, id_c, concepto, base, igic_porcentaje)
+                    db.agregar_factura(num_factura_auto, fecha, id_c, concepto, base, igic_porcentaje, retencion)
                     if provisiones_seleccionadas:
                         db.marcar_provisiones_aplicadas(provisiones_seleccionadas, num_factura_auto)
                     st.toast(f"Factura {num_factura_auto} guardada correctamente.", icon="✅")
@@ -188,16 +194,23 @@ with tab_resumen:
     facturas_periodo = db.obtener_facturas_periodo(año=año_sel, trimestre=trimestre_num)
     gastos_periodo   = db.obtener_gastos_periodo(año=año_sel, trimestre=trimestre_num)
 
-    total_ingresos = sum(float(dict(f)["total"]) for f in facturas_periodo)
-    total_gastos   = sum(float(dict(g)["importe"]) for g in gastos_periodo)
-    beneficio      = total_ingresos - total_gastos
+    total_base      = sum(float(dict(f)["base_imponible"]) for f in facturas_periodo)
+    total_igic      = sum(float(dict(f)["importe_igic"]) for f in facturas_periodo)
+    total_retenido  = sum(float(dict(f)["importe_retencion"]) for f in facturas_periodo)
+    total_cobrado   = sum(float(dict(f)["total_cobrado"]) for f in facturas_periodo)
+    total_gastos    = sum(float(dict(g)["importe"]) for g in gastos_periodo)
+
+    beneficio = total_base - total_gastos   # el IGIC no cuenta como ingreso propio
 
     st.subheader("Resumen del periodo")
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Ingresos (total facturado)", f"{total_ingresos:,.2f} €")
-    m2.metric("Gastos", f"{total_gastos:,.2f} €")
-    m3.metric("Beneficio neto", f"{beneficio:,.2f} €", delta=f"{beneficio:,.2f} €")
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Base imponible (ingresos reales)", f"{total_base:,.2f} €")
+    m2.metric("IGIC repercutido", f"{total_igic:,.2f} €", help="No es beneficio")
+    m3.metric("Retenido a cuenta IRPF", f"{total_retenido:,.2f} €")
+    m4.metric("Gastos", f"{total_gastos:,.2f} €")
+    m5.metric("Beneficio neto", f"{beneficio:,.2f} €", delta=f"{beneficio:,.2f} €")
 
+    st.caption(f"Dinero que entra en la cuenta este periodo: **{total_cobrado:,.2f} €**")
     st.divider()
 
     col_t1, col_t2 = st.columns(2)
@@ -216,7 +229,10 @@ with tab_resumen:
                     "Cliente":    fd["cliente"] or "—",
                     "Base (€)":   f"{float(fd['base_imponible']):.2f}",
                     "IGIC":       f"{fd['porcentaje_igic']}%",
-                    "Total (€)":  f"{float(fd['total']):.2f}",
+                    "Retención":  f"{fd['porcentaje_retencion']}%" if fd["porcentaje_retencion"] else "—",
+                    "Retenido (€)": f"{float(fd['importe_retencion']):.2f}",
+                    "Total facturado (€)": f"{float(fd['total']):.2f}",
+                    "Cobrado (€)": f"{float(fd['total_cobrado']):.2f}",
                 })
             st.dataframe(datos_f, use_container_width=True, hide_index=True)
 
