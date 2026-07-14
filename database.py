@@ -5,16 +5,29 @@ import os
 from dotenv import load_dotenv
 from supabase import create_client
 
-def conectar_db():
-    """Establece la conexión usando el Pooler de Supabase optimizado para IPv4."""
+import streamlit as st
+
+@st.cache_resource
+def _get_connection():
     return psycopg2.connect(
         host="aws-1-eu-central-1.pooler.supabase.com",
-        port="5432",                                
+        port="6543",
         database="postgres",
-        user="PLACEHOLDER",        
-        password="PLACEHOLDER",                 
+        user="XXX",
+        password="XXX",
         sslmode="require"
     )
+
+def conectar_db():
+    conn = _get_connection()
+    try:
+        # comprueba que sigue viva; si no, la recreamos
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        _get_connection.clear()
+        conn = _get_connection()
+    return conn
 # ─────────────────────────────────────────
 # CREACION DE TABLAS
 # ─────────────────────────────────────────
@@ -85,7 +98,7 @@ def crear_tablas():
     """)
 
     conn.commit()
-    conn.close()
+
 
 
 # CLIENTES
@@ -101,17 +114,15 @@ def agregar_cliente(nombre_fiscal, cif_nif, direccion="", email=""):
         conn.commit()
         return True
     except psycopg2.errors.UniqueViolation:
-        conn.rollback()
-        return False
-    finally:
-        conn.close()
+            conn.rollback()
+            return False
 
 def obtener_clientes():
     conn = conectar_db()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT id, nombre_fiscal, cif_nif, direccion, email FROM clientes ORDER BY nombre_fiscal")
     rows = cursor.fetchall()
-    conn.close()
+
     return rows
 
 def borrar_cliente(cliente_id):
@@ -119,7 +130,7 @@ def borrar_cliente(cliente_id):
     cursor = conn.cursor()
     cursor.execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
     conn.commit()
-    conn.close()
+
 
 
 # FACTURAS
@@ -134,7 +145,7 @@ def calcular_siguiente_factura():
         ORDER BY id DESC LIMIT 1
     """, (f"FAC-{año_actual}-%",))
     ultimo = cursor.fetchone()
-    conn.close()
+
     nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 2296
     return f"FAC-{año_actual}-{nuevo_num:04d}"
 
@@ -159,7 +170,7 @@ def agregar_factura(numero_factura, fecha, cliente_id, concepto, base_imponible,
           porcentaje_igic, importe_igic, total,
           porcentaje_retencion, importe_retencion, total_cobrado))
     conn.commit()
-    conn.close()
+
 
 def obtener_facturas_periodo(año=None, trimestre=None):
     conn = conectar_db()
@@ -184,7 +195,7 @@ def obtener_facturas_periodo(año=None, trimestre=None):
             ORDER BY f.id DESC
         """, params)
     rows = cursor.fetchall()
-    conn.close()
+
     return rows
 
 def borrar_factura(numero_factura):
@@ -192,7 +203,7 @@ def borrar_factura(numero_factura):
     cursor = conn.cursor()
     cursor.execute("DELETE FROM facturas WHERE numero_factura = %s", (numero_factura,))
     conn.commit()
-    conn.close()
+
 
 def guardar_factura_bd(numero, fecha, cliente_id, concepto, base, igic_p, importe_igic, total):
     conn = conectar_db()
@@ -202,7 +213,7 @@ def guardar_factura_bd(numero, fecha, cliente_id, concepto, base, igic_p, import
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """, (numero, fecha, cliente_id, concepto, base, igic_p, importe_igic, total))
     conn.commit()
-    conn.close()
+
 
 
 # GASTOS
@@ -217,7 +228,7 @@ def calcular_siguiente_gasto():
         ORDER BY id DESC LIMIT 1
     """, (f"GAS-{año_actual}-%",))
     ultimo = cursor.fetchone()
-    conn.close()
+
     nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 1
     return f"GAS-{año_actual}-{nuevo_num:04d}"
 
@@ -230,7 +241,7 @@ def registrar_gasto(fecha, proveedor_cif, concepto, importe):
         VALUES (%s, %s, %s, %s, %s)
     """, (n_gasto_id, fecha, proveedor_cif, concepto, importe))
     conn.commit()
-    conn.close()
+
 
 def obtener_gastos():
     conn = conectar_db()
@@ -241,7 +252,7 @@ def obtener_gastos():
         ORDER BY id DESC
     """)
     rows = cursor.fetchall()
-    conn.close()
+
     return rows
 
 def obtener_gastos_periodo(año=None, trimestre=None):
@@ -264,7 +275,7 @@ def obtener_gastos_periodo(año=None, trimestre=None):
         ORDER BY id DESC
     """, params)
     rows = cursor.fetchall()
-    conn.close()
+
     return rows
 
 def borrar_gasto(numero_gasto):
@@ -272,7 +283,7 @@ def borrar_gasto(numero_gasto):
     cursor = conn.cursor()
     cursor.execute("DELETE FROM gastos WHERE numero_gasto = %s", (numero_gasto,))
     conn.commit()
-    conn.close()
+
 
 
 # PROVISIONES
@@ -287,7 +298,7 @@ def calcular_siguiente_provision():
         ORDER BY id DESC LIMIT 1
     """, (f"PRO-{año_actual}-%",))
     ultimo = cursor.fetchone()
-    conn.close()
+
     nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 1
     return f"PRO-{año_actual}-{nuevo_num:04d}"
 
@@ -300,7 +311,7 @@ def registrar_provision(fecha, cliente_id, concepto, importe, factura_asociada=N
         VALUES (%s, %s, %s, %s, %s, %s)
     """, (numero, fecha, cliente_id, concepto, importe, factura_asociada))
     conn.commit()
-    conn.close()
+
 
 def obtener_provisiones():
     conn = conectar_db()
@@ -313,7 +324,7 @@ def obtener_provisiones():
         ORDER BY p.id DESC
     """)
     rows = cursor.fetchall()
-    conn.close()
+
     return rows
 
 def obtener_provisiones_pendientes(cliente_id):
@@ -326,7 +337,7 @@ def obtener_provisiones_pendientes(cliente_id):
         ORDER BY id ASC
     """, (cliente_id,))
     rows = cursor.fetchall()
-    conn.close()
+
     return rows
 
 def marcar_provisiones_aplicadas(ids_provisiones, numero_factura):
@@ -339,7 +350,7 @@ def marcar_provisiones_aplicadas(ids_provisiones, numero_factura):
             WHERE id = %s
         """, (numero_factura, pid))
     conn.commit()
-    conn.close()
+
 
 def obtener_provisiones_periodo(año=None, trimestre=None):
     conn = conectar_db()
@@ -363,7 +374,7 @@ def obtener_provisiones_periodo(año=None, trimestre=None):
         ORDER BY p.id DESC
     """, params)
     rows = cursor.fetchall()
-    conn.close()
+
     return rows
 
 def borrar_provision(numero_provision):
@@ -371,4 +382,3 @@ def borrar_provision(numero_provision):
     cursor = conn.cursor()
     cursor.execute("DELETE FROM provisiones WHERE numero_provision = %s", (numero_provision,))
     conn.commit()
-    conn.close()
