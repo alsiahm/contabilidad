@@ -1,0 +1,384 @@
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from datetime import datetime
+import os
+from dotenv import load_dotenv
+from supabase import create_client
+
+import streamlit as st
+
+@st.cache_resource
+def _get_connection():
+    return psycopg2.connect(
+        host="aws-1-eu-central-1.pooler.supabase.com",
+        port="6543",
+        database="postgres",
+        user="XXX",
+        password="XXX",
+        sslmode="require"
+    )
+
+def conectar_db():
+    conn = _get_connection()
+    try:
+        # comprueba que sigue viva; si no, la recreamos
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        _get_connection.clear()
+        conn = _get_connection()
+    return conn
+# ─────────────────────────────────────────
+# CREACION DE TABLAS
+# ─────────────────────────────────────────
+def crear_tablas():
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS clientes (
+        id SERIAL PRIMARY KEY,
+        nombre_fiscal TEXT NOT NULL,
+        cif_nif TEXT UNIQUE NOT NULL,
+        direccion TEXT,
+        email TEXT
+    )""")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS facturas (
+        id SERIAL PRIMARY KEY,
+        numero_factura TEXT UNIQUE NOT NULL,
+        fecha TEXT NOT NULL,
+        cliente_id INTEGER REFERENCES clientes(id),
+        concepto TEXT NOT NULL,
+        base_imponible REAL NOT NULL,
+        porcentaje_igic REAL DEFAULT 7.0,
+        importe_igic REAL NOT NULL,
+        total REAL NOT NULL
+    )""")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS gastos (
+        id SERIAL PRIMARY KEY,
+        numero_gasto TEXT UNIQUE NOT NULL,
+        fecha TEXT NOT NULL,
+        "proveedor_CIF" TEXT NOT NULL,
+        concepto TEXT NOT NULL,
+        importe REAL NOT NULL
+    )""")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS provisiones (
+        id SERIAL PRIMARY KEY,
+        numero_provision TEXT UNIQUE NOT NULL,
+        fecha TEXT NOT NULL,
+        cliente_id INTEGER REFERENCES clientes(id),
+        concepto TEXT NOT NULL,
+        importe REAL NOT NULL,
+        factura_asociada TEXT DEFAULT NULL,
+        aplicada INTEGER DEFAULT 0
+    )""")
+
+    cursor.execute("""
+        ALTER TABLE facturas ADD COLUMN IF NOT EXISTS porcentaje_retencion REAL DEFAULT 0
+    """)
+    cursor.execute("""
+        ALTER TABLE facturas ADD COLUMN IF NOT EXISTS importe_retencion REAL DEFAULT 0
+    """)
+    cursor.execute("""
+        ALTER TABLE facturas ADD COLUMN IF NOT EXISTS total_cobrado REAL
+    """)
+
+    cursor.execute("""
+        UPDATE facturas
+        SET total_cobrado = total,
+            importe_retencion = 0,
+            porcentaje_retencion = 0
+        WHERE total_cobrado IS NULL
+    """)
+
+    conn.commit()
+
+
+
+# CLIENTES
+
+def agregar_cliente(nombre_fiscal, cif_nif, direccion="", email=""):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO clientes (nombre_fiscal, cif_nif, direccion, email)
+            VALUES (%s, %s, %s, %s)
+        """, (nombre_fiscal, cif_nif, direccion, email))
+        conn.commit()
+        return True
+    except psycopg2.errors.UniqueViolation:
+            conn.rollback()
+            return False
+
+def obtener_clientes():
+    conn = conectar_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("SELECT id, nombre_fiscal, cif_nif, direccion, email FROM clientes ORDER BY nombre_fiscal")
+    rows = cursor.fetchall()
+
+    return rows
+
+def borrar_cliente(cliente_id):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
+    conn.commit()
+
+
+
+# FACTURAS
+
+def calcular_siguiente_factura():
+    conn = conectar_db()
+    cursor = conn.cursor()
+    año_actual = datetime.now().strftime("%Y")
+    cursor.execute("""
+        SELECT numero_factura FROM facturas
+        WHERE numero_factura LIKE %s
+        ORDER BY id DESC LIMIT 1
+    """, (f"FAC-{año_actual}-%",))
+    ultimo = cursor.fetchone()
+
+    nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 2296
+    return f"FAC-{año_actual}-{nuevo_num:04d}"
+
+def agregar_factura(numero_factura, fecha, cliente_id, concepto, base_imponible,
+                     porcentaje_igic_=7.0, porcentaje_retencion=0.0):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    porcentaje_igic = porcentaje_igic_
+    importe_igic = base_imponible * (porcentaje_igic / 100)
+    importe_retencion = base_imponible * (porcentaje_retencion / 100)
+
+    total = base_imponible + importe_igic
+    total_cobrado = total - importe_retencion
+
+    cursor.execute("""
+        INSERT INTO facturas
+            (numero_factura, fecha, cliente_id, concepto, base_imponible,
+             porcentaje_igic, importe_igic, total,
+             porcentaje_retencion, importe_retencion, total_cobrado)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (numero_factura, fecha, cliente_id, concepto, base_imponible,
+          porcentaje_igic, importe_igic, total,
+          porcentaje_retencion, importe_retencion, total_cobrado))
+    conn.commit()
+
+
+def obtener_facturas_periodo(año=None, trimestre=None):
+    conn = conectar_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    condiciones = []
+    params = []
+    if año:
+        condiciones.append("SUBSTRING(f.fecha, 7, 4) = %s")
+        params.append(str(año))
+    if trimestre:
+        meses = {1: ('01','02','03'), 2: ('04','05','06'), 3: ('07','08','09'), 4: ('10','11','12')}
+        condiciones.append("SUBSTRING(f.fecha, 4, 2) = ANY(%s)")
+        params.append(list(meses[trimestre]))
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+    cursor.execute(f"""
+            SELECT f.numero_factura, f.fecha, c.nombre_fiscal AS cliente,
+                f.base_imponible, f.porcentaje_igic, f.importe_igic, f.total,
+                f.porcentaje_retencion, f.importe_retencion, f.total_cobrado
+            FROM facturas f
+            LEFT JOIN clientes c ON f.cliente_id = c.id
+            {where}
+            ORDER BY f.id DESC
+        """, params)
+    rows = cursor.fetchall()
+
+    return rows
+
+def borrar_factura(numero_factura):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM facturas WHERE numero_factura = %s", (numero_factura,))
+    conn.commit()
+
+
+def guardar_factura_bd(numero, fecha, cliente_id, concepto, base, igic_p, importe_igic, total):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO facturas (numero_factura, fecha, cliente_id, concepto, base_imponible, porcentaje_igic, importe_igic, total)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """, (numero, fecha, cliente_id, concepto, base, igic_p, importe_igic, total))
+    conn.commit()
+
+
+
+# GASTOS
+
+def calcular_siguiente_gasto():
+    conn = conectar_db()
+    cursor = conn.cursor()
+    año_actual = datetime.now().strftime("%Y")
+    cursor.execute("""
+        SELECT numero_gasto FROM gastos
+        WHERE numero_gasto LIKE %s
+        ORDER BY id DESC LIMIT 1
+    """, (f"GAS-{año_actual}-%",))
+    ultimo = cursor.fetchone()
+
+    nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 1
+    return f"GAS-{año_actual}-{nuevo_num:04d}"
+
+def registrar_gasto(fecha, proveedor_cif, concepto, importe):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    n_gasto_id = calcular_siguiente_gasto()
+    cursor.execute("""
+        INSERT INTO gastos (numero_gasto, fecha, "proveedor_CIF", concepto, importe)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (n_gasto_id, fecha, proveedor_cif, concepto, importe))
+    conn.commit()
+
+
+def obtener_gastos():
+    conn = conectar_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("""
+        SELECT numero_gasto, fecha, "proveedor_CIF" AS proveedor, concepto, importe
+        FROM gastos
+        ORDER BY id DESC
+    """)
+    rows = cursor.fetchall()
+
+    return rows
+
+def obtener_gastos_periodo(año=None, trimestre=None):
+    conn = conectar_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    condiciones = []
+    params = []
+    if año:
+        condiciones.append("SUBSTRING(fecha, 7, 4) = %s")
+        params.append(str(año))
+    if trimestre:
+        meses = {1: ('01','02','03'), 2: ('04','05','06'), 3: ('07','08','09'), 4: ('10','11','12')}
+        condiciones.append("SUBSTRING(fecha, 4, 2) = ANY(%s)")
+        params.append(list(meses[trimestre]))
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+    cursor.execute(f"""
+        SELECT numero_gasto, fecha, "proveedor_CIF" AS proveedor, concepto, importe
+        FROM gastos
+        {where}
+        ORDER BY id DESC
+    """, params)
+    rows = cursor.fetchall()
+
+    return rows
+
+def borrar_gasto(numero_gasto):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM gastos WHERE numero_gasto = %s", (numero_gasto,))
+    conn.commit()
+
+
+
+# PROVISIONES
+
+def calcular_siguiente_provision():
+    conn = conectar_db()
+    cursor = conn.cursor()
+    año_actual = datetime.now().strftime("%Y")
+    cursor.execute("""
+        SELECT numero_provision FROM provisiones
+        WHERE numero_provision LIKE %s
+        ORDER BY id DESC LIMIT 1
+    """, (f"PRO-{año_actual}-%",))
+    ultimo = cursor.fetchone()
+
+    nuevo_num = int(ultimo[0].split("-")[-1]) + 1 if ultimo else 1
+    return f"PRO-{año_actual}-{nuevo_num:04d}"
+
+def registrar_provision(fecha, cliente_id, concepto, importe, factura_asociada=None):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    numero = calcular_siguiente_provision()
+    cursor.execute("""
+        INSERT INTO provisiones (numero_provision, fecha, cliente_id, concepto, importe, factura_asociada)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """, (numero, fecha, cliente_id, concepto, importe, factura_asociada))
+    conn.commit()
+
+
+def obtener_provisiones():
+    conn = conectar_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("""
+        SELECT p.numero_provision, p.fecha, c.nombre_fiscal AS cliente,
+               p.concepto, p.importe, p.factura_asociada, p.aplicada
+        FROM provisiones p
+        LEFT JOIN clientes c ON p.cliente_id = c.id
+        ORDER BY p.id DESC
+    """)
+    rows = cursor.fetchall()
+
+    return rows
+
+def obtener_provisiones_pendientes(cliente_id):
+    conn = conectar_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("""
+        SELECT id, numero_provision, concepto, importe
+        FROM provisiones
+        WHERE cliente_id = %s AND aplicada = 0
+        ORDER BY id ASC
+    """, (cliente_id,))
+    rows = cursor.fetchall()
+
+    return rows
+
+def marcar_provisiones_aplicadas(ids_provisiones, numero_factura):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    for pid in ids_provisiones:
+        cursor.execute("""
+            UPDATE provisiones
+            SET aplicada = 1, factura_asociada = %s
+            WHERE id = %s
+        """, (numero_factura, pid))
+    conn.commit()
+
+
+def obtener_provisiones_periodo(año=None, trimestre=None):
+    conn = conectar_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    condiciones = []
+    params = []
+    if año:
+        condiciones.append("SUBSTRING(p.fecha, 7, 4) = %s")
+        params.append(str(año))
+    if trimestre:
+        meses = {1: ('01','02','03'), 2: ('04','05','06'), 3: ('07','08','09'), 4: ('10','11','12')}
+        condiciones.append("SUBSTRING(p.fecha, 4, 2) = ANY(%s)")
+        params.append(list(meses[trimestre]))
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+    cursor.execute(f"""
+        SELECT p.numero_provision, p.fecha, c.nombre_fiscal AS cliente,
+               p.concepto, p.importe, p.factura_asociada, p.aplicada
+        FROM provisiones p
+        LEFT JOIN clientes c ON p.cliente_id = c.id
+        {where}
+        ORDER BY p.id DESC
+    """, params)
+    rows = cursor.fetchall()
+
+    return rows
+
+def borrar_provision(numero_provision):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM provisiones WHERE numero_provision = %s", (numero_provision,))
+    conn.commit()
